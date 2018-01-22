@@ -11,14 +11,10 @@ const asyncLib = require('async');
 /* Variables */
 var instructor_resources_id = -1;
 var temp_id = -1;
-var arr_length = -1;
+// var arr_length = -1;
 
 /* View available course object functions */
 // https://github.com/byuitechops/d2l-to-canvas-conversion-tool/blob/master/documentation/classFunctions.md
-
-// TODO: Setup word hits both Development Team and Instructor
-// TODO: Do a function to delete Temp module
-// TODO: Before moving stuff over to temp module, delete SubHeader
 
 module.exports = (course, stepCallback) => {
     course.addModuleReport('setup-instructor-resources');
@@ -119,6 +115,7 @@ module.exports = (course, stepCallback) => {
         ];
 
         var arr = [];
+        var tempArr = [];
 
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
             if (getErr) {
@@ -128,22 +125,24 @@ module.exports = (course, stepCallback) => {
                 for (var i = 0; i < order.length; i++) {
                     for (var x = 0; x < module_items.length; x++) {
                         if (order[i] == module_items[x].title) {
-                            arr.push(module_items.id);
+                            arr.push(module_items[x].id);
+                            tempArr.push(module_items[x].title);
                             break;
                         }
                     }
-                    //item was never found in the temp module, will be commented for future reference
+                    //item was never found in the temp module, is commented for future reference
                     // if (i != arr.length) {
                     //     course.throwWarning(`setup-instructor-resources`, `${order[i]} is missing from Instructor Resources.`);
                     // }
                 }
 
-                asyncLib.eachLimit(arr, 1, (item, eachLimitCallback) => {
+                asyncLib.eachOfLimit(arr, 1, (item, key, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item}`, {
                         'module_item': {
                             'module_id': instructor_resources_id,
                             'new_tab': true,
-                            'indent': 1
+                            'indent': 1,
+                            'position': key + 1
                         }
                     }, (putErr, results) => {
                         if (putErr) {
@@ -159,59 +158,91 @@ module.exports = (course, stepCallback) => {
                         functionCallback(err);
                         return;
                     } else {
-                        arr_length = arr.length;
-                        functionCallback(null, course, order, arr);
+                        functionCallback(null, course, order, order.length);
                     }
                 });
             }
         });
     }
 
-    function moveExtraContents(course, order, arr, functionCallback) {
-        asyncLib.eachLimit(module_items, 3, (item, eachLimitCallback) => {
-            if (!order.includes(item.title)) {
-                canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, {
-                    'module_item': {
-                        'module_id': instructor_resources_id,
-                        'new_tab': true,
-                        'indent': 1
-                    }
-                }, (putErr, results) => {
-                    if (putErr) {
-                        eachLimitCallback(putErr);
-                        return;
-                    } else {
-                        course.success(`setup-instructor-resources`, `Successfully moved ${item.title} into Instructor Resources module`);
-                        eachLimitCallback(null, course)
-                    }
-                });
-            }
-        }, (err) => {
+    function moveExtraContents(course, order, arr_length, functionCallback) {
+        var types = [
+            'SubHeader'
+        ];
+
+        implementHeader(course, arr_length, (err) => {
             if (err) {
                 functionCallback(err);
                 return;
-            } else {
-                functionCallback(null, course);
             }
+        });
+
+        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
+            asyncLib.eachOfLimit(module_items, 1, (item, key, eachLimitCallback) => {
+                if (types.includes(item.type)) {
+                    canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, (err, results) => {
+                        if (err) {
+                            eachLimitCallback(err);
+                        } else {
+                            course.success(`setup-instructor-resources`, `Successfully deleted ${item.title} SubHeader`);
+                            eachLimitCallback(null, course);
+                        }
+                    });
+                } else {
+                    // console.log(`Key + arr.length + 1: ${key + arr.length + 1}`);
+                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, {
+                        'module_item': {
+                            'module_id': instructor_resources_id,
+                            'new_tab': true,
+                            'indent': 1,
+                            'position': 99 //key + arr.length + 1  //second SubHeader is located at arr.length
+                        }
+                    }, (putErr, results) => {
+                        if (putErr) {
+                            eachLimitCallback(putErr);
+                            return;
+                        } else {
+                            course.success(`setup-instructor-resources`, `Successfully moved ${item.title} into Instructor Resources module`);
+                            eachLimitCallback(null, course)
+                        }
+                    });
+                }
+            }, (err) => {
+                if (err) {
+                    functionCallback(err);
+                    return;
+                } else {
+                    functionCallback(null, course);
+                }
+            });
         });
     }
 
-    function implementHeader(course, functionCallback) {
+    function implementHeader(course, arr_length, functionCallback) {
         buildHeader(course, 'Standard Resources', 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
-            } else {
-                course.success(`setup-instructor-resorces`, `Successfully built Standard Resources header`);
             }
         });
 
-        buildHeader(course, 'Supplemental Resources', arr_length, (headerErr, results) => {
+        buildHeader(course, 'Supplemental Resources', arr_length + 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
             } else {
-                course.success(`setup-instructor-resorces`, `Successfully built Supplemental Resources header`);
+                functionCallback(null);
+            }
+        });
+    }
+
+    function deleteTempMOdule(course, functionCallback) {
+        canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}`, (deleteErr, results) => {
+            if (deleteErr) {
+                functionCallback(deleteErr);
+                return;
+            } else {
+                course.success(`setup-instructor-resources`, `Sucessfully removed temp module`);
                 functionCallback(null, course);
             }
         });
@@ -223,7 +254,7 @@ module.exports = (course, stepCallback) => {
             moveToTemp,
             moveContents,
             moveExtraContents,
-            implementHeader
+            deleteTempMOdule
         ];
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
