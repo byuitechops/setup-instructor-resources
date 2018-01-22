@@ -11,7 +11,6 @@ const asyncLib = require('async');
 /* Variables */
 var instructor_resources_id = -1;
 var temp_id = -1;
-// var arr_length = -1;
 
 /* View available course object functions */
 // https://github.com/byuitechops/d2l-to-canvas-conversion-tool/blob/master/documentation/classFunctions.md
@@ -46,6 +45,12 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * makeTempModule()
+    * This function goes through and creates the temp module
+    * so the instructor resources module will be clean and
+    * ready to start the process.
+    ****************************************************/
     function makeTempModule(course, functionCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules`, {
             'module': {
@@ -63,12 +68,19 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * moveToTemp()
+    * This function goes through the instructor resources
+    * module and then moves all of the items to the temporary
+    * module
+    ****************************************************/
     function moveToTemp(course, functionCallback) {
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${instructor_resources_id}/items`, (getErr, module_items) => {
             if (getErr) {
                 functionCallback(getErr);
                 return;
             } else {
+                //move each item
                 asyncLib.eachLimit(module_items, 1, (module_item, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructor_resources_id}/items/${module_item.id}`, {
                         'module_item': {
@@ -106,6 +118,7 @@ module.exports = (course, stepCallback) => {
     * Purpose:
     *****************************************************/
     function moveContents(course, functionCallback) {
+        //required ordering according to OCT
         var order = [
             'Setup for Course Instructor',
             'General Lesson Notes',
@@ -116,6 +129,7 @@ module.exports = (course, stepCallback) => {
             //'Course Maintenance Log' -- DOES NOT EXIST IN GAUNTLET
         ];
 
+        //store results
         var arr = [];
 
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
@@ -137,6 +151,7 @@ module.exports = (course, stepCallback) => {
                     // }
                 }
 
+                //move only standard resources portion of the instructor resources module.
                 asyncLib.eachOfLimit(arr, 1, (item, key, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item}`, {
                         'module_item': {
@@ -166,11 +181,17 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * moveExtraContents()
+    * Purpose: Move the remaining stuff to the Instructor
+    * Resources module.
+    *****************************************************/
     function moveExtraContents(course, order, arr_length, functionCallback) {
         var types = [
             'SubHeader'
         ];
 
+        //build headers
         implementHeader(course, arr_length, (err) => {
             if (err) {
                 functionCallback(err);
@@ -178,9 +199,13 @@ module.exports = (course, stepCallback) => {
             }
         });
 
+        //get the temp module list
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
+
+            //initiate the moving process
             asyncLib.eachOfLimit(module_items, 1, (item, key, eachLimitCallback) => {
                 if (types.includes(item.type)) {
+                    //at this point, we know it is a subheader so we need to delete it from the course.
                     canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, (err, results) => {
                         if (err) {
                             eachLimitCallback(err);
@@ -191,11 +216,14 @@ module.exports = (course, stepCallback) => {
                     });
                 } else {
                     // console.log(`Key + arr.length + 1: ${key + arr.length + 1}`);
+
+                    //we know at this point that it is not a SubHeader so move it out of temp module
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, {
                         'module_item': {
                             'module_id': instructor_resources_id,
                             'new_tab': true,
                             'indent': 1,
+                            //set to 99 to put it at the end of the module because math formula doesn't work currently
                             'position': 99 //key + arr.length + 1  //second SubHeader is located at arr.length
                         }
                     }, (putErr, results) => {
@@ -219,6 +247,11 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * implementHeader()
+    * Purpose: Call the function to build the headers
+    * and pass in the number and header title to the function
+    *****************************************************/
     function implementHeader(course, arr_length, functionCallback) {
         buildHeader(course, 'Standard Resources', 1, (headerErr, results) => {
             if (headerErr) {
@@ -240,18 +273,30 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * deleteTempMOdule()
+    * This function goe through and deletes the temp module.
+    * It also resets the temp_id to -1 to signify that the
+    * module does not exist anymore.
+    *****************************************************/
     function deleteTempMOdule(course, functionCallback) {
         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}`, (deleteErr, results) => {
             if (deleteErr) {
                 functionCallback(deleteErr);
                 return;
             } else {
+                temp_id = -1;
                 course.success(`setup-instructor-resources`, `Sucessfully removed temp module`);
                 functionCallback(null, course);
             }
         });
     }
 
+    /****************************************************
+    * waterfallFunctions()
+    * This function goe through the waterfall motions and
+    * acts as the driver for the function
+    *****************************************************/
     function waterfallFunctions(course, functionCallback) {
         var functions = [
             asyncLib.apply(makeTempModule, course),
@@ -296,6 +341,7 @@ module.exports = (course, stepCallback) => {
                     }
                 });
 
+                //instructor resources module does not exist. throw error and move on to the next child module
                 if (instructor_resources_id === -1) {
                     course.throwErr(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
                     stepCallback(null, course);
