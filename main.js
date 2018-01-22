@@ -18,6 +18,8 @@ var temp_id = -1;
 
 module.exports = (course, stepCallback) => {
     course.addModuleReport('setup-instructor-resources');
+    course.newInfo('standardResourcesArr', []);
+    course.newInfo('headerArr', []);
 
     /****************************************************
     * buildHeader()
@@ -115,7 +117,6 @@ module.exports = (course, stepCallback) => {
         ];
 
         var arr = [];
-        var tempArr = [];
 
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
             if (getErr) {
@@ -126,7 +127,7 @@ module.exports = (course, stepCallback) => {
                     for (var x = 0; x < module_items.length; x++) {
                         if (order[i] == module_items[x].title) {
                             arr.push(module_items[x].id);
-                            tempArr.push(module_items[x].title);
+                            course.info.standardResourcesArr.push(module_items[x].title);
                             break;
                         }
                     }
@@ -223,6 +224,8 @@ module.exports = (course, stepCallback) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
+            } else {
+                course.info.headerArr.push('Standard Resources');
             }
         });
 
@@ -231,6 +234,7 @@ module.exports = (course, stepCallback) => {
                 functionCallback(headerErr);
                 return;
             } else {
+                course.info.headerArr.push('Supplemental Resources');
                 functionCallback(null);
             }
         });

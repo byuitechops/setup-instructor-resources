@@ -4,27 +4,23 @@
 const tap = require('tap');
 
 function g1Tests(course, callback) {
-    // Tap tests for Gauntlet 1 go here
-    tap.pass('Success! Wheee! 1');
-    // tap.fail('YOLO');
-    callback(null, course);
-}
+    var srArr = course.info.standardResourcesArr;
+    var hArr = course.info.headerArr;
 
-function g2Tests(course, callback) {
-    // Tap tests for Gauntlet 2 go here
-    tap.pass('Success! Wheee! 2');
-    callback(null, course);
-}
+    tap.equal(srArr.length, 6);
 
-function g3Tests(course, callback) {
-    // Tap tests for Gauntlet 3 go here
-    tap.pass('Success! Wheee! 3');
-    callback(null, course);
-}
+    tap.equal(srArr[0], 'Setup for Course Instructor');
+    tap.equal(srArr[1], 'General Lesson Notes');
+    tap.equal(srArr[2], 'Release Notes');
+    tap.equal(srArr[3], 'Course Map');
+    tap.equal(srArr[4], 'Teaching Group Directory');
+    tap.equal(srArr[5], 'Online Instructor Community');
 
-function g4Tests(course, callback) {
-    // Tap tests for Gauntlet 4 go here
-    tap.pass('Success! Wheee! 4');
+    tap.equal(hArr, 2);
+
+    tap.equal(hArr[0], 'Standard Resources');
+    tap.equal(hArr[1], 'Supplemental Resources');
+
     callback(null, course);
 }
 
@@ -32,17 +28,5 @@ module.exports = [
         {
             gauntlet: 1,
             tests: g1Tests
-        },
-        {
-            gauntlet: 2,
-            tests: g2Tests
-        },
-        {
-            gauntlet: 3,
-            tests: g3Tests
-        },
-        {
-            gauntlet: 4,
-            tests: g4Tests
-        },
+        }
 ];
