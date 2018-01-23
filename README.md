@@ -18,8 +18,8 @@ This child module occurs *post-import* from Brightspace D2L to Canvas.
     - Course Maintenance Log
 
 * All other activities are stored underneath Supplemental Resources text header.
-* A different child module(https://github.com/byuitechops/module-publish-settings) will go through all of the modules and unpublish certain
-modules so this module does not deal with the publish/unpublish portion of the module.
+* A [different child module](https://github.com/byuitechops/module-publish-settings) will go through all of the modules and unpublish certain
+modules so this child module does not deal with the publish/unpublish portion of the Instructor Resources.
 
 
 ## Authors
