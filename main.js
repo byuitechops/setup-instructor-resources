@@ -358,5 +358,5 @@ module.exports = (course, stepCallback) => {
                 }
             }
         });
-    }, 20000)
+    }, 20000);
 };
