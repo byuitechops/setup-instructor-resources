@@ -17,8 +17,6 @@ var temp_id = -1;
 
 module.exports = (course, stepCallback) => {
     course.addModuleReport('setup-instructor-resources');
-    course.newInfo('standardResourcesArr', []);
-    course.newInfo('headerArr', []);
 
     /****************************************************
     * buildHeader()
@@ -141,14 +139,9 @@ module.exports = (course, stepCallback) => {
                     for (var x = 0; x < module_items.length; x++) {
                         if (order[i] == module_items[x].title) {
                             arr.push(module_items[x].id);
-                            course.info.standardResourcesArr.push(module_items[x].title);
                             break;
                         }
                     }
-                    //item was never found in the temp module, is commented for future reference
-                    // if (i != arr.length) {
-                    //     course.throwWarning(`setup-instructor-resources`, `${order[i]} is missing from Instructor Resources.`);
-                    // }
                 }
 
                 //move only standard resources portion of the instructor resources module.
@@ -224,7 +217,6 @@ module.exports = (course, stepCallback) => {
                             'new_tab': true,
                             'indent': 1,
                             //set to 99 to put it at the end of the module because math formula doesn't work currently
-                            'position': 99 //key + arr.length + 1  //second SubHeader is located at arr.length
                         }
                     }, (putErr, results) => {
                         if (putErr) {
@@ -257,8 +249,6 @@ module.exports = (course, stepCallback) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
-            } else {
-                course.info.headerArr.push('Standard Resources');
             }
         });
 
@@ -267,7 +257,6 @@ module.exports = (course, stepCallback) => {
                 functionCallback(headerErr);
                 return;
             } else {
-                course.info.headerArr.push('Supplemental Resources');
                 functionCallback(null);
             }
         });
@@ -279,7 +268,7 @@ module.exports = (course, stepCallback) => {
     * It also resets the temp_id to -1 to signify that the
     * module does not exist anymore.
     *****************************************************/
-    function deleteTempMOdule(course, functionCallback) {
+    function deleteTempModule(course, functionCallback) {
         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}`, (deleteErr, results) => {
             if (deleteErr) {
                 functionCallback(deleteErr);
@@ -299,11 +288,12 @@ module.exports = (course, stepCallback) => {
     *****************************************************/
     function waterfallFunctions(course, functionCallback) {
         var functions = [
-            asyncLib.apply(makeTempModule, course),
+            asyncLib.constant(course),
+            makeTempModule,
             moveToTemp,
             moveContents,
             moveExtraContents,
-            deleteTempMOdule
+            deleteTempModule
         ];
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
@@ -320,43 +310,42 @@ module.exports = (course, stepCallback) => {
     *                         START HERE                           *
     ****************************************************************/
     //retrieve list of modules since course object doesn't come with a list of modules
-    setTimeout(() => {
-        canvas.getModules(course.info.canvasOU, (getErr, module_list) => {
-            if (getErr) {
-                course.throwErr(`setup-instructor-resources`, getErr);
+    canvas.getModules(course.info.canvasOU, (getErr, module_list) => {
+        if (getErr) {
+            course.throwErr(`setup-instructor-resources`, getErr);
+            stepCallback(null, course);
+            return;
+        } else {
+            course.success(`setup-instructor-resources`, `Successfully retrieved ${module_list.length} modules.`);
+            //retrieve the id of the instructor module so we can access the module
+            //and update the instructor_resources_id global variable
+            // instructor_resources_id = module_list.find(module => {
+            //     console.log(module.name);
+            //     if (module.name === 'Instructor Resources') {
+            //         return module.id;
+            //     }
+            // });
+            module_list.forEach(module => {
+                if (modules_name.includes(module.name)) {
+                    instructor_resources_id = module.id;
+                }
+            });
+                // console.log(`IR id: ${JSON.stringify(instructor_resources_id)}`);
+                //instructor resources module does not exist. throw error and move on to the next child module
+            if (instructor_resources_id <= -1 || instructor_resources_id === undefined) {
+                course.throwErr(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
-                return;
             } else {
-                var modules_name = [
-                    'Instructor Resources'
-                ];
-
-                course.success(`setup-instructor-resources`, `Successfully retrieved ${module_list.length} modules.`);
-
-                //retrieve the id of the instructor module so we can access the module
-                //and update the instructor_resources_id global variable
-                module_list.forEach(module => {
-                    if (modules_name.includes(module.name)) {
-                        instructor_resources_id = module.id;
+                waterfallFunctions(course, (waterfallErr, results) => {
+                    if (waterfallErr) {
+                        course.throwErr(`setup-instructor-resources`, waterfallErr);
+                        stepCallback(null, course);
+                    } else {
+                        course.success(`setup-instructor-resources`, `Successfully completed setup-instructor-resources`);
+                        stepCallback(null, course);
                     }
                 });
-
-                //instructor resources module does not exist. throw error and move on to the next child module
-                if (instructor_resources_id === -1) {
-                    course.throwErr(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
-                    stepCallback(null, course);
-                } else {
-                    waterfallFunctions(course, (waterfallErr, results) => {
-                        if (waterfallErr) {
-                            course.throwErr(`setup-instructor-resources`, waterfallErr);
-                            stepCallback(null, course);
-                        } else {
-                            course.success(`setup-instructor-resources`, `Successfully completed setup-instructor-resources`);
-                            stepCallback(null, course);
-                        }
-                    });
-                }
             }
-        });
-    }, 20000);
+        }
+    });
 };
