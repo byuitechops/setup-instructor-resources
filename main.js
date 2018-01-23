@@ -333,7 +333,7 @@ module.exports = (course, stepCallback) => {
                 // console.log(`IR id: ${JSON.stringify(instructor_resources_id)}`);
                 //instructor resources module does not exist. throw error and move on to the next child module
             if (instructor_resources_id <= -1 || instructor_resources_id === undefined) {
-                course.throwErr(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
+                course.throwWarning(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
             } else {
                 waterfallFunctions(course, (waterfallErr, results) => {
