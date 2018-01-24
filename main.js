@@ -9,15 +9,10 @@ const canvas = require('canvas-wrapper');
 const asyncLib = require('async');
 
 /* Variables */
-var instructor_resources_id = -1;
-var temp_id = -1;
-
-/* View available course object functions */
-// https://github.com/byuitechops/d2l-to-canvas-conversion-tool/blob/master/documentation/classFunctions.md
+var instructorResourcesId = -1;
+var tempId = -1;
 
 module.exports = (course, stepCallback) => {
-    course.addModuleReport('setup-instructor-resources');
-
     /****************************************************
     * buildHeader()
     * Parameters: course object, headerName str, pos int
@@ -26,8 +21,8 @@ module.exports = (course, stepCallback) => {
     * inside the instructor module
     ****************************************************/
     function buildHeader(course, headerName, pos, functionCallback) {
-        canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules/${instructor_resources_id}/items`, {
-            'module_item': {
+        canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, {
+            'moduleItem': {
                 'title': headerName,
                 'type': 'SubHeader',
                 'position': pos
@@ -37,7 +32,7 @@ module.exports = (course, stepCallback) => {
                 functionCallback(postErr);
                 return;
             } else {
-                course.success(`setup-instructor-resources`, `Successfully built ${headerName} header`);
+                course.message(`Successfully built ${headerName} header`);
                 functionCallback(null, course);
             }
         });
@@ -59,8 +54,8 @@ module.exports = (course, stepCallback) => {
                 functionCallback(postErr);
                 return;
             } else {
-                course.success(`setup-instructor-resources`, `Sucessfully built temp module. TM ID: ${module.id}`);
-                temp_id = module.id;
+                course.message(`Sucessfully built temp module. TM ID: ${module.id}`);
+                tempId = module.id;
                 functionCallback(null, course);
             }
         });
@@ -73,16 +68,16 @@ module.exports = (course, stepCallback) => {
     * module
     ****************************************************/
     function moveToTemp(course, functionCallback) {
-        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${instructor_resources_id}/items`, (getErr, module_items) => {
+        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, (getErr, moduleItem) => {
             if (getErr) {
                 functionCallback(getErr);
                 return;
             } else {
-                //move each item
-                asyncLib.eachLimit(module_items, 1, (module_item, eachLimitCallback) => {
-                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructor_resources_id}/items/${module_item.id}`, {
-                        'module_item': {
-                            'module_id': temp_id,
+                //move each item to temp module
+                asyncLib.eachLimit(moduleItem, 1, (moduleItem, eachLimitCallback) => {
+                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items/${moduleItem.id}`, {
+                        'moduleItem': {
+                            'module_id': tempId,
                             'indent': 1,
                             'new_tab': true
                         }
@@ -91,8 +86,7 @@ module.exports = (course, stepCallback) => {
                             eachLimitCallback(putErr);
                             return;
                         } else {
-                            course.success(`setup-instructor-resources`,
-                                `Successfully moved ${results.title} into the temp module`);
+                            course.message(`Successfully moved ${results.title} into the temp module`);
                             eachLimitCallback(null, course);
                         }
                     });
@@ -101,8 +95,7 @@ module.exports = (course, stepCallback) => {
                         functionCallback(err);
                         return;
                     } else {
-                        course.success(`setup-instructor-resources`,
-                            `Successfully moved all Instructor Resources stuff into temp module`);
+                        course.message(`Successfully moved all Instructor Resources stuff into temp module`);
                         functionCallback(null, course);
                     }
                 });
@@ -123,32 +116,32 @@ module.exports = (course, stepCallback) => {
             'Release Notes',
             'Course Map',
             'Teaching Group Directory',
-            'Online Instructor Community'//,
+            'Online Instructor Community'
             //'Course Maintenance Log' -- DOES NOT EXIST IN GAUNTLET
         ];
 
         //store results
         var arr = [];
 
-        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
+        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
             if (getErr) {
                 functionCallback(getErr);
                 return;
             } else {
                 for (var i = 0; i < order.length; i++) {
-                    for (var x = 0; x < module_items.length; x++) {
-                        if (order[i] == module_items[x].title) {
-                            arr.push(module_items[x].id);
+                    for (var x = 0; x < moduleItem.length; x++) {
+                        if (order[i] == moduleItem[x].title) {
+                            arr.push(moduleItem[x].id);
                             break;
                         }
                     }
                 }
 
                 //move only standard resources portion of the instructor resources module.
-                asyncLib.eachOfLimit(arr, 1, (item, key, eachLimitCallback) => {
-                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item}`, {
-                        'module_item': {
-                            'module_id': instructor_resources_id,
+                asyncLib.eachOfSeries(arr, (item, key, eachLimitCallback) => {
+                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item}`, {
+                        'moduleItem': {
+                            'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
                             'position': key + 1
@@ -158,7 +151,10 @@ module.exports = (course, stepCallback) => {
                             eachLimitCallback(putErr);
                             return;
                         } else {
-                            course.success(`setup-instructor-resources`, `Successfully moved ${item} into Instructor Resources module`);
+                            course.log(`re-organized Instructor Resources`, {
+                                'Title': item.title,
+                                'ID': item.id
+                            });
                             eachLimitCallback(null, course);
                         }
                     });
@@ -179,13 +175,9 @@ module.exports = (course, stepCallback) => {
     * Purpose: Move the remaining stuff to the Instructor
     * Resources module.
     *****************************************************/
-    function moveExtraContents(course, order, arr_length, functionCallback) {
-        var types = [
-            'SubHeader'
-        ];
-
+    function moveExtraContents(course, order, arrLength, functionCallback) {
         //build headers
-        implementHeader(course, arr_length, (err) => {
+        implementHeader(course, arrLength, (err) => {
             if (err) {
                 functionCallback(err);
                 return;
@@ -193,37 +185,38 @@ module.exports = (course, stepCallback) => {
         });
 
         //get the temp module list
-        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items`, (getErr, module_items) => {
+        canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
 
             //initiate the moving process
-            asyncLib.eachOfLimit(module_items, 1, (item, key, eachLimitCallback) => {
-                if (types.includes(item.type)) {
+            asyncLib.eachSeries(moduleItem, (item, eachLimitCallback) => {
+                if (item.type === 'SubHeader') {
                     //at this point, we know it is a subheader so we need to delete it from the course.
-                    canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, (err, results) => {
+                    canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, (err, results) => {
                         if (err) {
                             eachLimitCallback(err);
                         } else {
-                            course.success(`setup-instructor-resources`, `Successfully deleted ${item.title} SubHeader`);
+                            course.message(`Successfully deleted ${item.title} SubHeader`);
                             eachLimitCallback(null, course);
                         }
                     });
                 } else {
-                    // console.log(`Key + arr.length + 1: ${key + arr.length + 1}`);
-
                     //we know at this point that it is not a SubHeader so move it out of temp module
-                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}/items/${item.id}`, {
-                        'module_item': {
-                            'module_id': instructor_resources_id,
+                    canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, {
+                        'moduleItem': {
+                            'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
-                            //set to 99 to put it at the end of the module because math formula doesn't work currently
+                            'position': 99 //set to the end of instructor resources
                         }
                     }, (putErr, results) => {
                         if (putErr) {
                             eachLimitCallback(putErr);
                             return;
                         } else {
-                            course.success(`setup-instructor-resources`, `Successfully moved ${item.title} into Instructor Resources module`);
+                            course.log(`re-organized Instructor Resources`, {
+                                'Title': item.title,
+                                'ID': item.id
+                            });
                             eachLimitCallback(null, course)
                         }
                     });
@@ -233,6 +226,7 @@ module.exports = (course, stepCallback) => {
                     functionCallback(err);
                     return;
                 } else {
+
                     functionCallback(null, course);
                 }
             });
@@ -244,7 +238,7 @@ module.exports = (course, stepCallback) => {
     * Purpose: Call the function to build the headers
     * and pass in the number and header title to the function
     *****************************************************/
-    function implementHeader(course, arr_length, functionCallback) {
+    function implementHeader(course, arrLength, functionCallback) {
         buildHeader(course, 'Standard Resources', 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
@@ -252,7 +246,7 @@ module.exports = (course, stepCallback) => {
             }
         });
 
-        buildHeader(course, 'Supplemental Resources', arr_length + 1, (headerErr, results) => {
+        buildHeader(course, 'Supplemental Resources', arrLength + 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
@@ -265,17 +259,17 @@ module.exports = (course, stepCallback) => {
     /****************************************************
     * deleteTempMOdule()
     * This function goe through and deletes the temp module.
-    * It also resets the temp_id to -1 to signify that the
+    * It also resets the tempId to -1 to signify that the
     * module does not exist anymore.
     *****************************************************/
     function deleteTempModule(course, functionCallback) {
-        canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${temp_id}`, (deleteErr, results) => {
+        canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}`, (deleteErr, results) => {
             if (deleteErr) {
                 functionCallback(deleteErr);
                 return;
             } else {
-                temp_id = -1;
-                course.success(`setup-instructor-resources`, `Sucessfully removed temp module`);
+                tempId = -1;
+                course.message(`Sucessfully removed temp module`);
                 functionCallback(null, course);
             }
         });
@@ -310,38 +304,32 @@ module.exports = (course, stepCallback) => {
     *                         START HERE                           *
     ****************************************************************/
     //retrieve list of modules since course object doesn't come with a list of modules
-    canvas.getModules(course.info.canvasOU, (getErr, module_list) => {
+    canvas.getModules(course.info.canvasOU, (getErr, moduleList) => {
         if (getErr) {
-            course.throwErr(`setup-instructor-resources`, getErr);
+            course.error(getErr);
             stepCallback(null, course);
             return;
         } else {
-            course.success(`setup-instructor-resources`, `Successfully retrieved ${module_list.length} modules.`);
+            course.message(`Successfully retrieved ${moduleList.length} modules.`);
             //retrieve the id of the instructor module so we can access the module
-            //and update the instructor_resources_id global variable
-            // instructor_resources_id = module_list.find(module => {
-            //     console.log(module.name);
-            //     if (module.name === 'Instructor Resources') {
-            //         return module.id;
-            //     }
-            // });
-            module_list.forEach(module => {
-                if (modules_name.includes(module.name)) {
-                    instructor_resources_id = module.id;
+            //and update the instructorResourcesId global variable
+            moduleList.forEach(module => {
+                if (module.name === 'Instructur Resources') {
+                    instructorResourcesId = module.id;
                 }
             });
-                // console.log(`IR id: ${JSON.stringify(instructor_resources_id)}`);
+                // console.log(`IR id: ${JSON.stringify(instructorResourcesId)}`);
                 //instructor resources module does not exist. throw error and move on to the next child module
-            if (instructor_resources_id <= -1 || instructor_resources_id === undefined) {
-                course.throwWarning(`setup-instructor-resources`, `Instructor Resources module not found. Please check the course and try again.`);
+            if (instructorResourcesId <= -1 || instructorResourcesId === undefined) {
+                course.warning(`Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
             } else {
                 waterfallFunctions(course, (waterfallErr, results) => {
                     if (waterfallErr) {
-                        course.throwErr(`setup-instructor-resources`, waterfallErr);
+                        course.error(waterfallErr);
                         stepCallback(null, course);
                     } else {
-                        course.success(`setup-instructor-resources`, `Successfully completed setup-instructor-resources`);
+                        course.message(`Successfully completed setup-instructor-resources`);
                         stepCallback(null, course);
                     }
                 });
