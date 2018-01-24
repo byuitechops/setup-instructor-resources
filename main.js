@@ -22,7 +22,7 @@ module.exports = (course, stepCallback) => {
     ****************************************************/
     function buildHeader(course, headerName, pos, functionCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, {
-            'moduleItem': {
+            'module_item': {
                 'title': headerName,
                 'type': 'SubHeader',
                 'position': pos
@@ -74,9 +74,9 @@ module.exports = (course, stepCallback) => {
                 return;
             } else {
                 //move each item to temp module
-                asyncLib.eachLimit(moduleItem, 1, (moduleItem, eachLimitCallback) => {
+                asyncLib.eachSeries(moduleItem, (moduleItem, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items/${moduleItem.id}`, {
-                        'moduleItem': {
+                        'module_item': {
                             'module_id': tempId,
                             'indent': 1,
                             'new_tab': true
@@ -140,7 +140,7 @@ module.exports = (course, stepCallback) => {
                 //move only standard resources portion of the instructor resources module.
                 asyncLib.eachOfSeries(arr, (item, key, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item}`, {
-                        'moduleItem': {
+                        'module_item': {
                             'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
@@ -152,8 +152,8 @@ module.exports = (course, stepCallback) => {
                             return;
                         } else {
                             course.log(`re-organized Instructor Resources`, {
-                                'Title': item.title,
-                                'ID': item.id
+                                'Title': results.title,
+                                'ID': results.id
                             });
                             eachLimitCallback(null, course);
                         }
@@ -202,7 +202,7 @@ module.exports = (course, stepCallback) => {
                 } else {
                     //we know at this point that it is not a SubHeader so move it out of temp module
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, {
-                        'moduleItem': {
+                        'module_item': {
                             'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
@@ -314,12 +314,12 @@ module.exports = (course, stepCallback) => {
             //retrieve the id of the instructor module so we can access the module
             //and update the instructorResourcesId global variable
             moduleList.forEach(module => {
-                if (module.name === 'Instructur Resources') {
+                if (module.name === 'Instructor Resources') {
                     instructorResourcesId = module.id;
                 }
             });
-                // console.log(`IR id: ${JSON.stringify(instructorResourcesId)}`);
-                //instructor resources module does not exist. throw error and move on to the next child module
+
+            //instructor resources module does not exist. throw error and move on to the next child module
             if (instructorResourcesId <= -1 || instructorResourcesId === undefined) {
                 course.warning(`Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
