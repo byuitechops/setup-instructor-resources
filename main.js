@@ -259,7 +259,7 @@ module.exports = (course, stepCallback) => {
     }
 
     /****************************************************
-    * deleteTempMOdule()
+    * deleteTempModule()
     * This function goe through and deletes the temp module.
     * It also resets the tempId to -1 to signify that the
     * module does not exist anymore.
@@ -277,6 +277,12 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    /****************************************************
+    * finalTouches()
+    * This function goes through and ensures that the
+    * instructor resources module are being implemented
+    * correctly. 
+    *****************************************************/
     function finalTouches(course, functionCallback) {
         canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}`, {
             'module': {
