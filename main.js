@@ -116,8 +116,8 @@ module.exports = (course, stepCallback) => {
             'Release Notes',
             'Course Map',
             'Teaching Group Directory',
-            'Online Instructor Community'
-            //'Course Maintenance Log' -- DOES NOT EXIST IN GAUNTLET
+            'Online Instructor Community',
+            'Course Maintenance Log'
         ];
 
         //store results
@@ -144,6 +144,7 @@ module.exports = (course, stepCallback) => {
                             'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
+                            'published': false,
                             'position': key + 1
                         }
                     }, (putErr, results) => {
@@ -206,6 +207,7 @@ module.exports = (course, stepCallback) => {
                             'module_id': instructorResourcesId,
                             'new_tab': true,
                             'indent': 1,
+                            'published': false,
                             'position': 99 //set to the end of instructor resources
                         }
                     }, (putErr, results) => {
@@ -275,6 +277,22 @@ module.exports = (course, stepCallback) => {
         });
     }
 
+    function finalTouches(course, functionCallback) {
+        canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}`, {
+            'module': {
+                'name': 'Instructor Resources (Do NOT Publish)',
+                'published': false
+            }
+        }, (putErr, results) => {
+            if (putErr) {
+                functionCallback(putErr);
+                return;
+            } else {
+                functionCallback(null, course);
+            }
+        });
+    }
+
     /****************************************************
     * waterfallFunctions()
     * This function goe through the waterfall motions and
@@ -287,7 +305,8 @@ module.exports = (course, stepCallback) => {
             moveToTemp,
             moveContents,
             moveExtraContents,
-            deleteTempModule
+            deleteTempModule,
+            finalTouches
         ];
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
