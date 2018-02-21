@@ -25,11 +25,11 @@ None
 
 ## Options
 
-None.
+None
 
 ## Outputs
 
-None.
+None
 
 ## Process
 
