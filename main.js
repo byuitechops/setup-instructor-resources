@@ -181,7 +181,7 @@ module.exports = (course, stepCallback) => {
     *****************************************************/
     function moveExtraContents(order, arrLength, functionCallback) {
         //build headers
-        implementHeader(arrLength, (headerErr) => {
+        implementHeaders(arrLength, (headerErr) => {
             if (headerErr) {
                 functionCallback(err);
                 return;
@@ -244,11 +244,11 @@ module.exports = (course, stepCallback) => {
     }
 
     /****************************************************
-    * implementHeader()
+    * implementHeaders()
     * Purpose: Call the function to build the headers
     * and pass in the number and header title to the function
     *****************************************************/
-    function implementHeader(arrLength, functionCallback) {
+    function implementHeaders(arrLength, functionCallback) {
         buildHeader('Standard Resources', 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
@@ -349,14 +349,15 @@ module.exports = (course, stepCallback) => {
             course.message(`Successfully retrieved ${moduleList.length} modules.`);
             //retrieve the id of the instructor module so we can access the module
             //and update the instructorResourcesId global variable
-            moduleList.forEach(module => {
-                if (module.name === 'Instructor Resources') {
-                    instructorResourcesId = module.id;
-                }
+
+            var instructorResourcesObj = moduleList.find((module) => {
+                return module.name === 'Instructor Resources'
             });
 
+            instructorResourcesId = instructorResourcesObj.id;
+
             //instructor resources module does not exist. throw error and move on to the next child module
-            if (instructorResourcesId <= -1 || instructorResourcesId === undefined) {
+            if (instructorResourcesId === -1 || instructorResourcesId === undefined) {
                 course.warning(`Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
             } else {
