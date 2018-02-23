@@ -351,13 +351,13 @@ module.exports = (course, stepCallback) => {
             //and update the instructorResourcesId global variable
 
             var instructorResourcesObj = moduleList.find((module) => {
-                return module.name === 'Instructor Resources'
+                return module.name === 'Instructor Resources';
             });
 
             instructorResourcesId = instructorResourcesObj.id;
 
             //instructor resources module does not exist. throw error and move on to the next child module
-            if (instructorResourcesId === -1 || instructorResourcesId === undefined) {
+            if (instructorResourcesId === -1 || typeof instructorResourcesId === "undefined") {
                 course.warning(`Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
             } else {
