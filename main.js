@@ -15,24 +15,24 @@ var tempId = -1;
 module.exports = (course, stepCallback) => {
     /****************************************************
     * buildHeader()
-    * Parameters: headerName str, pos int
+    * Parameters: headerName str, position int
     * Purpose: This function receives the name
     * of the text header to create and builds one
     * inside the instructor module
     ****************************************************/
-    function buildHeader(headerName, pos, functionCallback) {
+    function buildHeader(headerName, position, functionCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, {
             'module_item': {
                 'title': headerName,
                 'type': 'SubHeader',
-                'position': pos
+                'position': position
             }
         }, (postErr, results) => {
             if (postErr) {
                 functionCallback(postErr);
                 return;
             } else {
-                course.message(`Successfully built ${headerName} header`);
+                course.message(`Successfully built \'${headerName}\' header`);
                 functionCallback(null);
                 return;
             }
@@ -55,7 +55,7 @@ module.exports = (course, stepCallback) => {
                 functionCallback(postErr);
                 return;
             } else {
-                course.message(`Sucessfully built temp module. TM ID: ${module.id}`);
+                course.message(`Sucessfully built temp module. Temp module ID: ${module.id}`);
                 tempId = module.id;
                 functionCallback(null);
                 return;
@@ -64,12 +64,12 @@ module.exports = (course, stepCallback) => {
     }
 
     /****************************************************
-    * moveToTemp()
+    * moveToTempModule()
     * This function goes through the instructor resources
     * module and then moves all of the items to the temporary
     * module
     ****************************************************/
-    function moveToTemp(functionCallback) {
+    function moveToTempModule(functionCallback) {
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, (getErr, moduleItem) => {
             if (getErr) {
                 functionCallback(getErr);
@@ -122,7 +122,7 @@ module.exports = (course, stepCallback) => {
         ];
 
         //store results
-        var arr = [];
+        var orderArray = [];
 
         //get temp module items
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
@@ -133,14 +133,14 @@ module.exports = (course, stepCallback) => {
                 for (var i = 0; i < order.length; i++) {
                     for (var x = 0; x < moduleItem.length; x++) {
                         if (order[i] == moduleItem[x].title) {
-                            arr.push(moduleItem[x].id);
+                            orderArray.push(moduleItem[x].id);
                             break;
                         }
                     }
                 }
 
                 //move only standard resources portion of the instructor resources module.
-                asyncLib.eachOfSeries(arr, (item, key, eachLimitCallback) => {
+                asyncLib.eachOfSeries(orderArray, (item, key, eachLimitCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item}`, {
                         'module_item': {
                             'module_id': instructorResourcesId,
@@ -154,7 +154,7 @@ module.exports = (course, stepCallback) => {
                             eachLimitCallback(putErr);
                             return;
                         } else {
-                            course.log(`re-organized Instructor Resources`, {
+                            course.log(`re-organized Instructor Resources module`, {
                                 'Title': results.title,
                                 'ID': results.id
                             });
@@ -166,7 +166,7 @@ module.exports = (course, stepCallback) => {
                         functionCallback(err);
                         return;
                     } else {
-                        functionCallback(null, order, order.length);
+                        functionCallback(null, order, orderArray.length);
                         return;
                     }
                 });
@@ -179,11 +179,11 @@ module.exports = (course, stepCallback) => {
     * Purpose: Move the remaining stuff to the Instructor
     * Resources module.
     *****************************************************/
-    function moveExtraContents(order, arrLength, functionCallback) {
+    function moveExtraContents(order, orderArrayLength, functionCallback) {
         //build headers
-        implementHeaders(arrLength, (headerErr) => {
+        implementHeaders(orderArrayLength, (headerErr) => {
             if (headerErr) {
-                functionCallback(err);
+                functionCallback(headerErr);
                 return;
             }
         });
@@ -222,7 +222,7 @@ module.exports = (course, stepCallback) => {
                                 eachLimitCallback(putErr);
                                 return;
                             } else {
-                                course.log(`re-organized Instructor Resources`, {
+                                course.log(`re-organized Instructor Resources module`, {
                                     'Title': item.title,
                                     'ID': item.id
                                 });
@@ -248,7 +248,8 @@ module.exports = (course, stepCallback) => {
     * Purpose: Call the function to build the headers
     * and pass in the number and header title to the function
     *****************************************************/
-    function implementHeaders(arrLength, functionCallback) {
+    function implementHeaders(orderArrayLength, functionCallback) {  
+        //build Standard Resources header
         buildHeader('Standard Resources', 1, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
@@ -256,7 +257,9 @@ module.exports = (course, stepCallback) => {
             }
         });
 
-        buildHeader('Supplemental Resources', arrLength + 1, (headerErr, results) => {
+        //build Supplemental Resources header
+        //the + 2 accounts for the Standard Resources header and the order array length
+        buildHeader('Supplemental Resources', orderArrayLength + 2, (headerErr, results) => {
             if (headerErr) {
                 functionCallback(headerErr);
                 return;
@@ -318,7 +321,7 @@ module.exports = (course, stepCallback) => {
     function waterfallFunctions(functionCallback) {
         var functions = [
             makeTempModule,
-            moveToTemp,
+            moveToTempModule,
             moveContents,
             moveExtraContents,
             deleteTempModule,
@@ -347,9 +350,9 @@ module.exports = (course, stepCallback) => {
             return;
         } else {
             course.message(`Successfully retrieved ${moduleList.length} modules.`);
+
             //retrieve the id of the instructor module so we can access the module
             //and update the instructorResourcesId global variable
-
             var instructorResourcesObj = moduleList.find((module) => {
                 return module.name === 'Instructor Resources';
             });
