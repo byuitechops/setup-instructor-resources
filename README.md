@@ -50,7 +50,7 @@ Describe in steps how the module accomplishes its goals.
 
 List the categories used in logging data in your module.
 
-- Items sorted - Title: re-organized Instructor Resources
+- Items sorted - Title: re-organized Instructor Resources module
 
 ## Requirements
 
