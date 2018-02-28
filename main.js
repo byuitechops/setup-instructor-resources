@@ -20,7 +20,7 @@ module.exports = (course, stepCallback) => {
     * of the text header to create and builds one
     * inside the instructor module
     ****************************************************/
-    function buildHeader(headerName, position, functionCallback) {
+    function buildHeader(headerName, position, buildHeaderCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, {
             'module_item': {
                 'title': headerName,
@@ -29,11 +29,11 @@ module.exports = (course, stepCallback) => {
             }
         }, (postErr, results) => {
             if (postErr) {
-                functionCallback(postErr);
+                buildHeaderCallback(postErr);
                 return;
             } else {
                 course.message(`Successfully built \'${headerName}\' header`);
-                functionCallback(null);
+                buildHeaderCallback(null);
                 return;
             }
         });
@@ -45,19 +45,19 @@ module.exports = (course, stepCallback) => {
     * so the instructor resources module will be clean and
     * ready to start the process.
     ****************************************************/
-    function makeTempModule(functionCallback) {
+    function makeTempModule(makeTempModuleCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules`, {
             'module': {
                 'name': 'Temp Module'
             }
         }, (postErr, module) => {
             if (postErr) {
-                functionCallback(postErr);
+                makeTempModuleCallback(postErr);
                 return;
             } else {
                 course.message(`Sucessfully built temp module. Temp module ID: ${module.id}`);
                 tempId = module.id;
-                functionCallback(null);
+                makeTempModuleCallback(null);
                 return;
             }
         });
@@ -69,14 +69,14 @@ module.exports = (course, stepCallback) => {
     * module and then moves all of the items to the temporary
     * module
     ****************************************************/
-    function moveToTempModule(functionCallback) {
+    function moveToTempModule(moveToTempModuleCallback) {
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items`, (getErr, moduleItem) => {
             if (getErr) {
-                functionCallback(getErr);
+                moveToTempModuleCallback(getErr);
                 return;
             } else {
                 //move each item to temp module
-                asyncLib.eachSeries(moduleItem, (moduleItem, eachLimitCallback) => {
+                asyncLib.eachSeries(moduleItem, (moduleItem, eachSeriesCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}/items/${moduleItem.id}`, {
                         'module_item': {
                             'module_id': tempId,
@@ -85,20 +85,20 @@ module.exports = (course, stepCallback) => {
                         }
                     }, (putErr, results) => {
                         if (putErr) {
-                            eachLimitCallback(putErr);
+                            eachSeriesCallback(putErr);
                             return;
                         } else {
                             course.message(`Successfully moved ${results.title} into the temp module`);
-                            eachLimitCallback(null);
+                            eachSeriesCallback(null);
                         }
                     });
                 }, (err) => {
                     if (err) {
-                        functionCallback(err);
+                        moveToTempModuleCallback(err);
                         return;
                     } else {
                         course.message(`Successfully moved all Instructor Resources stuff into temp module`);
-                        functionCallback(null);
+                        moveToTempModuleCallback(null);
                         return;
                     }
                 });
@@ -109,7 +109,7 @@ module.exports = (course, stepCallback) => {
     /****************************************************
     * moveContents()
     *****************************************************/
-    function moveContents(functionCallback) {
+    function moveContents(moveContentsCallback) {
         //required ordering according to OCT course
         var order = [
             'Setup for Course Instructor',
@@ -127,7 +127,7 @@ module.exports = (course, stepCallback) => {
         //get temp module items
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
             if (getErr) {
-                functionCallback(getErr);
+                moveContentsCallback(getErr);
                 return;
             } else {
                 for (var i = 0; i < order.length; i++) {
@@ -163,10 +163,10 @@ module.exports = (course, stepCallback) => {
                     });
                 }, (err) => {
                     if (err) {
-                        functionCallback(err);
+                        moveContentsCallback(err);
                         return;
                     } else {
-                        functionCallback(null, order, orderArray.length);
+                        moveContentsCallback(null, orderArray.length);
                         return;
                     }
                 });
@@ -175,36 +175,70 @@ module.exports = (course, stepCallback) => {
     }
 
     /****************************************************
+    * implementHeaders()
+    * Purpose: Call the function to build the headers
+    * and pass in the number and header title to the function
+    *****************************************************/
+    function implementHeaders(orderArrayLength, implementHeadersCallback) {
+        //trying to make things more flexibile through array
+        //this way guarantees that the Standard Resources header is created
+        //before the Supplemental Resources header so the results are always
+        //consistent.
+        var headersObjArray = [
+            {
+                'title': 'Standard Resources',
+                'position': 1
+            },
+            {
+                'title': 'Supplemental Resources',
+
+                //the + 2 accounts for the Standard Resources header and the order array length
+                'position': orderArrayLength + 2
+            }
+        ];
+
+        asyncLib.eachSeries(headersObjArray, (header, eachSeriesCallback) => {
+            buildHeader(header.title, header.position, (headerErr, results) => {
+                if (headerErr) {
+                    eachSeriesCallback(headerErr);
+                    return;
+                }
+
+                eachSeriesCallback(null);
+            });
+        }, (eachSeriesErr) => {
+            if (eachSeriesErr) {
+                implementHeadersCallback(eachSeriesErr);
+                return;
+            }
+
+            implementHeadersCallback(null);
+        });
+    }
+
+    /****************************************************
     * moveExtraContents()
     * Purpose: Move the remaining stuff to the Instructor
     * Resources module.
     *****************************************************/
-    function moveExtraContents(order, orderArrayLength, functionCallback) {
-        //build headers
-        implementHeaders(orderArrayLength, (headerErr) => {
-            if (headerErr) {
-                functionCallback(headerErr);
-                return;
-            }
-        });
-
+    function moveExtraContents(moveExtraContentsCallback) {
         //get the temp module list
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
             // handle get Err
             if (getErr) {
-                functionCallback(getErr);
+                moveExtraContentsCallback(getErr);
                 return;
             } else {
                 //initiate the moving process
-                asyncLib.eachSeries(moduleItem, (item, eachLimitCallback) => {
+                asyncLib.eachSeries(moduleItem, (item, eachSeriesCallback) => {
                     if (item.type === 'SubHeader') {
                         //at this point, we know it is a subheader so we need to delete it from the course.
                         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, (err, results) => {
                             if (err) {
-                                eachLimitCallback(err);
+                                eachSeriesCallback(err);
                             } else {
                                 course.message(`Successfully deleted ${item.title} SubHeader`);
-                                eachLimitCallback(null);
+                                eachSeriesCallback(null);
                             }
                         });
                     } else {
@@ -219,53 +253,26 @@ module.exports = (course, stepCallback) => {
                             }
                         }, (putErr, results) => {
                             if (putErr) {
-                                eachLimitCallback(putErr);
+                                eachSeriesCallback(putErr);
                                 return;
                             } else {
                                 course.log(`re-organized Instructor Resources module`, {
                                     'Title': item.title,
                                     'ID': item.id
                                 });
-                                eachLimitCallback(null);
+                                eachSeriesCallback(null);
                             }
                         });
                     }
                 }, (err) => {
                     if (err) {
-                        functionCallback(err);
+                        moveExtraContentsCallback(err);
                         return;
                     } else {
-                        functionCallback(null);
+                        moveExtraContentsCallback(null);
                         return;
                     }
                 });
-            }
-        });
-    }
-
-    /****************************************************
-    * implementHeaders()
-    * Purpose: Call the function to build the headers
-    * and pass in the number and header title to the function
-    *****************************************************/
-    function implementHeaders(orderArrayLength, functionCallback) {  
-        //build Standard Resources header
-        buildHeader('Standard Resources', 1, (headerErr, results) => {
-            if (headerErr) {
-                functionCallback(headerErr);
-                return;
-            }
-        });
-
-        //build Supplemental Resources header
-        //the + 2 accounts for the Standard Resources header and the order array length
-        buildHeader('Supplemental Resources', orderArrayLength + 2, (headerErr, results) => {
-            if (headerErr) {
-                functionCallback(headerErr);
-                return;
-            } else {
-                functionCallback(null);
-                return;
             }
         });
     }
@@ -276,15 +283,15 @@ module.exports = (course, stepCallback) => {
     * It also resets the tempId to -1 to signify that the
     * module does not exist anymore.
     *****************************************************/
-    function deleteTempModule(functionCallback) {
+    function deleteTempModule(deleteTempModuleCallback) {
         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}`, (deleteErr, results) => {
             if (deleteErr) {
-                functionCallback(deleteErr);
+                deleteTempModuleCallback(deleteErr);
                 return;
             } else {
                 tempId = -1;
                 course.message(`Sucessfully removed temp module`);
-                functionCallback(null);
+                deleteTempModuleCallback(null);
                 return;
             }
         });
@@ -296,7 +303,7 @@ module.exports = (course, stepCallback) => {
     * instructor resources module are being implemented
     * correctly. 
     *****************************************************/
-    function finalTouches(functionCallback) {
+    function finalTouches(finalTouchesCallback) {
         canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${instructorResourcesId}`, {
             'module': {
                 'name': 'Instructor Resources (Do NOT Publish)',
@@ -304,10 +311,10 @@ module.exports = (course, stepCallback) => {
             }
         }, (putErr, results) => {
             if (putErr) {
-                functionCallback(putErr);
+                finalTouchesCallback(putErr);
                 return;
             } else {
-                functionCallback(null);
+                finalTouchesCallback(null);
                 return;
             }
         });
@@ -318,11 +325,12 @@ module.exports = (course, stepCallback) => {
     * This function goe through the waterfall motions and
     * acts as the driver for the function
     *****************************************************/
-    function waterfallFunctions(functionCallback) {
+    function waterfallFunctions(waterfallFunctionsCallback) {
         var functions = [
             makeTempModule,
             moveToTempModule,
             moveContents,
+            implementHeaders,
             moveExtraContents,
             deleteTempModule,
             finalTouches
@@ -330,10 +338,10 @@ module.exports = (course, stepCallback) => {
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
             if (waterfallErr) {
-                functionCallback(waterfallErr);
+                waterfallFunctionsCallback(waterfallErr);
                 return;
             } else {
-                functionCallback(null);
+                waterfallFunctionsCallback(null);
                 return;
             }
         });
@@ -343,10 +351,10 @@ module.exports = (course, stepCallback) => {
     *                         START HERE                           *
     ****************************************************************/
     //retrieve list of modules since course object doesn't come with a list of modules
-    canvas.getModules(course.info.canvasOU, (getErr, moduleList) => {
-        if (getErr) {
-            course.error(getErr);
-            stepCallback(null);
+    canvas.getModules(course.info.canvasOU, (getModulesErr, moduleList) => {
+        if (getModulesErr) {
+            course.error(getModulesErr);
+            stepCallback(null, course);
             return;
         } else {
             course.message(`Successfully retrieved ${moduleList.length} modules.`);
@@ -364,12 +372,12 @@ module.exports = (course, stepCallback) => {
                 course.warning(`Instructor Resources module not found. Please check the course and try again.`);
                 stepCallback(null, course);
             } else {
-                waterfallFunctions((waterfallErr, results) => {
-                    if (waterfallErr) {
-                        course.error(waterfallErr);
+                waterfallFunctions((waterfallFunctionsErr, results) => {
+                    if (waterfallFunctionsErr) {
+                        course.error(waterfallFunctionsErr);
                         stepCallback(null, course);
                     } else {
-                        course.message(`Successfully completed setup-instructor-resources`);
+                        course.message(`Successfully completed setup-instructor-resources module`);
                         stepCallback(null, course);
                     }
                 });
