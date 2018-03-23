@@ -4,7 +4,7 @@
     "description": "This goes through the Instructor Resources module and organizes it based on the OCT (course template) course.",
     "main": "main.js",
     "dependencies": {
-        "canvas-wrapper": "git+https://github.com/byuitechops/canvas-wrapper.git",
+        "canvas-wrapper": "github:byuitechops/canvas-wrapper",
         "promise": "^8.0.1"
     },
     "devDependencies": {
