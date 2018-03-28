@@ -4,7 +4,6 @@
 
 /* Put dependencies here */
 
-/* Include this line only if you are going to use Canvas API */
 const canvas = require('canvas-wrapper');
 const asyncLib = require('async');
 
@@ -31,35 +30,52 @@ module.exports = (course, stepCallback) => {
             if (postErr) {
                 buildHeaderCallback(postErr);
                 return;
-            } else {
-                course.message(`Successfully built \'${headerName}\' header`);
-                buildHeaderCallback(null);
-                return;
             }
+
+            course.message(`Successfully built \'${headerName}\' header`);
+            buildHeaderCallback(null);
         });
     }
 
     /****************************************************
-    * makeTempModule()
+    * buildModule()
+    * This function takes in a name and builds a module
+    * with the name as its title. It will call the callback
+    * with the module object so the function caller can
+    * do whatever it needs to do.
+    ****************************************************/
+    function buildModule(name, buildModuleCallback) {
+        canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules`, {
+            'module': {
+                'name': name
+            }
+        }, (postErr, module) => {
+            if (postErr) {
+                buildModuleCallback(postErr);
+                return;
+            }
+            
+            buildModuleCallback(null, module);
+                
+        });
+    }
+
+    /****************************************************
+    * createTempModule()
     * This function goes through and creates the temp module
     * so the instructor resources module will be clean and
     * ready to start the process.
     ****************************************************/
-    function makeTempModule(makeTempModuleCallback) {
-        canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules`, {
-            'module': {
-                'name': 'Temp Module'
-            }
-        }, (postErr, module) => {
-            if (postErr) {
-                makeTempModuleCallback(postErr);
-                return;
-            } else {
-                course.message(`Sucessfully built temp module. Temp module ID: ${module.id}`);
-                tempId = module.id;
-                makeTempModuleCallback(null);
+    function createTempModule(createTempModule) {
+        buildModule('Temp Module', (err, module) => {
+            if (err) {
+                createTempModule(err);
                 return;
             }
+
+            course.message(`Sucessfully built temp module. Temp module ID: ${module.id}`);
+            tempId = module.id;
+            createTempModule(null);
         });
     }
 
@@ -87,20 +103,20 @@ module.exports = (course, stepCallback) => {
                         if (putErr) {
                             eachSeriesCallback(putErr);
                             return;
-                        } else {
-                            course.message(`Successfully moved ${results.title} into the temp module`);
-                            eachSeriesCallback(null);
                         }
+
+                        course.message(`Successfully moved ${results.title} into the temp module`);
+                        eachSeriesCallback(null);
                     });
                 }, (err) => {
                     if (err) {
                         moveToTempModuleCallback(err);
                         return;
-                    } else {
-                        course.message(`Successfully moved all Instructor Resources stuff into temp module`);
-                        moveToTempModuleCallback(null);
-                        return;
                     }
+
+                    course.message(`Successfully moved all Instructor Resources stuff into temp module`);
+
+                    moveToTempModuleCallback(null);
                 });
             }
         });
@@ -153,22 +169,23 @@ module.exports = (course, stepCallback) => {
                         if (putErr) {
                             eachLimitCallback(putErr);
                             return;
-                        } else {
-                            course.log(`re-organized Instructor Resources module`, {
-                                'Title': results.title,
-                                'ID': results.id
-                            });
-                            eachLimitCallback(null);
                         }
+
+                        course.log(`re-organized Instructor Resources module`, {
+                            'Title': results.title,
+                            'ID': results.id
+                        });
+
+                        eachLimitCallback(null);
                     });
                 }, (err) => {
                     if (err) {
                         moveContentsCallback(err);
                         return;
-                    } else {
-                        moveContentsCallback(null, orderArray.length);
-                        return;
                     }
+
+                    moveContentsCallback(null, orderArray.length);
+                    return;
                 });
             }
         });
@@ -236,10 +253,10 @@ module.exports = (course, stepCallback) => {
                         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, (err, results) => {
                             if (err) {
                                 eachSeriesCallback(err);
-                            } else {
-                                course.message(`Successfully deleted ${item.title} SubHeader`);
-                                eachSeriesCallback(null);
                             }
+                            
+                            course.message(`Successfully deleted ${item.title} SubHeader`);
+                            eachSeriesCallback(null);
                         });
                     } else {
                         //we know at this point that it is not a SubHeader so move it out of temp module
@@ -255,23 +272,23 @@ module.exports = (course, stepCallback) => {
                             if (putErr) {
                                 eachSeriesCallback(putErr);
                                 return;
-                            } else {
-                                course.log(`re-organized Instructor Resources module`, {
-                                    'Title': item.title,
-                                    'ID': item.id
-                                });
-                                eachSeriesCallback(null);
                             }
+
+                            course.log(`re-organized Instructor Resources module`, {
+                                'Title': item.title,
+                                'ID': item.id
+                            });
+
+                            eachSeriesCallback(null);
                         });
                     }
                 }, (err) => {
                     if (err) {
                         moveExtraContentsCallback(err);
                         return;
-                    } else {
-                        moveExtraContentsCallback(null);
-                        return;
                     }
+                    
+                    moveExtraContentsCallback(null);
                 });
             }
         });
@@ -288,12 +305,11 @@ module.exports = (course, stepCallback) => {
             if (deleteErr) {
                 deleteTempModuleCallback(deleteErr);
                 return;
-            } else {
-                tempId = -1;
-                course.message(`Sucessfully removed temp module`);
-                deleteTempModuleCallback(null);
-                return;
             }
+
+            tempId = -1;
+            course.message(`Sucessfully removed temp module`);
+            deleteTempModuleCallback(null);
         });
     }
 
@@ -313,39 +329,123 @@ module.exports = (course, stepCallback) => {
             if (putErr) {
                 finalTouchesCallback(putErr);
                 return;
-            } else {
-                finalTouchesCallback(null);
-                return;
             }
+            
+            finalTouchesCallback(null);
         });
     }
 
     /****************************************************
-    * waterfallFunctions()
+    * instructorResourcesExist()
     * This function goe through the waterfall motions and
     * acts as the driver for the function
     *****************************************************/
-    function waterfallFunctions(waterfallFunctionsCallback) {
+    function instructorResourcesExist() {
         var functions = [
-            makeTempModule,
+            createTempModule,
             moveToTempModule,
             moveContents,
             implementHeaders,
             moveExtraContents,
             deleteTempModule,
-            finalTouches
+            finalTouches,
         ];
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
             if (waterfallErr) {
-                waterfallFunctionsCallback(waterfallErr);
-                return;
-            } else {
-                waterfallFunctionsCallback(null);
+                course.error(waterfallErr);
                 return;
             }
+
+            course.message(`Successfully completed setup-instructor-resources module`);
+            return;
         });
     }
+
+    function instructorResourcesDoNotExist() {
+        var functions = [
+            createInstructorResourcesModule,
+            searchCourse,
+        ];
+
+        asyncLib.waterfall(functions, (waterfallErr, results) => {
+            if (waterfallErr) {
+                course.error(waterfallErr);
+                return;
+            }
+
+            course.message(`Successfully completed setup-instructor-resources module`);
+            return;
+        });
+    }
+
+    function createInstructorResourcesModule(createModuleCallback) {
+        buildModule('Instructor Resources Module', (err, module) => {
+            if (err) {
+                createTempModule(err);
+                return;
+            }
+
+            course.message(`Sucessfully built Instructor Resources module. Instructor Resources module ID: ${module.id}`);
+            instructorResourcesId = module.id;
+            createTempModule(null);
+        });
+    }
+
+    function searchCourse(searchCourseCallback) {
+        var contentsArr = [];
+        var validModuleItems = [
+            'Setup for Course Instructor',
+            'General Lesson Notes',
+            'Release Notes',
+            'Course Map',
+            'Teaching Group Directory',
+            'Online Instructor Community',
+            'Course Maintenance Log',
+        ];
+
+        canvas.getModules(course.info.canvasOU, (getModulesErr, moduleList) => {
+            if (getModulesErr) {
+                searchCourseCallback(getModulesErr);
+                return;
+            }
+
+            asyncLib.each(moduleList, (element, eachCallback) => {
+                canvas.getModuleItems(course.info.canvasOU, element.id, (getModulesItemsErr, moduleItems) => {
+                    if (getModulesItemsErr) {
+                        eachCallback(getModulesItemsErr);
+                        return;
+                    }
+
+                    asyncLib.each(moduleItems, (item, innerEachCallback) => {
+                        if (validModuleItems.includes(item.title)) {
+                            //pushing item object so all properties will remain
+                            contentsArr.push(item);
+                        }
+
+                        //advance to next iteration
+                        innerEachCallback(null);
+                    }, (innerErr) => {
+                        if (innerErr) {
+                            eachCallback(innerErr);
+                            return;
+                        }
+
+                        eachCallback(null);
+                    });
+                });
+            }, (outerErr) => {
+                if (outerErr) {
+                    searchCourseCallback(outerErr);
+                    return;
+                }
+
+                searchCourseCallback(null);
+            });
+        });
+    }
+
+
 
     /****************************************************************
     *                         START HERE                           *
@@ -356,32 +456,25 @@ module.exports = (course, stepCallback) => {
             course.error(getModulesErr);
             stepCallback(null, course);
             return;
+        }
+
+        course.message(`Successfully retrieved ${moduleList.length} modules.`);
+
+        //retrieve the id of the instructor module so we can access the module
+        //and update the instructorResourcesId global variable
+        var instructorResourcesObj = moduleList.find((module) => {
+            return module.name === 'Instructor Resources';
+        });
+
+        //instructor resources module does not exist. throw error and move on to the next child module
+        if (typeof instructorResourcesObj === "undefined") {
+            course.warning('Will be fixed soon...');
+            stepCallback(null, course);
         } else {
-            course.message(`Successfully retrieved ${moduleList.length} modules.`);
-
-            //retrieve the id of the instructor module so we can access the module
-            //and update the instructorResourcesId global variable
-            var instructorResourcesObj = moduleList.find((module) => {
-                return module.name === 'Instructor Resources';
-            });
-
             instructorResourcesId = instructorResourcesObj.id;
 
-            //instructor resources module does not exist. throw error and move on to the next child module
-            if (instructorResourcesId === -1 || typeof instructorResourcesId === "undefined") {
-                course.warning(`Instructor Resources module not found. Please check the course and try again.`);
-                stepCallback(null, course);
-            } else {
-                waterfallFunctions((waterfallFunctionsErr, results) => {
-                    if (waterfallFunctionsErr) {
-                        course.error(waterfallFunctionsErr);
-                        stepCallback(null, course);
-                    } else {
-                        course.message(`Successfully completed setup-instructor-resources module`);
-                        stepCallback(null, course);
-                    }
-                });
-            }
+            instructorResourcesExist();
+            stepCallback(null, course);
         }
     });
 };
