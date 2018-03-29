@@ -14,6 +14,10 @@ var tempId = -1;
 module.exports = (course, stepCallback) => {
     /****************************************************
     * buildHeader()
+    * 
+    * @param headerName - str
+    * @param position - int
+    * 
     * Parameters: headerName str, position int
     * Purpose: This function receives the name
     * of the text header to create and builds one
@@ -32,22 +36,27 @@ module.exports = (course, stepCallback) => {
                 return;
             }
 
-            course.message(`Successfully built \'${headerName}\' header`);
             buildHeaderCallback(null);
         });
     }
 
     /****************************************************
     * buildModule()
+    * 
+    * @param name - str
+    * @param position - int
+    * 
     * This function takes in a name and builds a module
     * with the name as its title. It will call the callback
     * with the module object so the function caller can
     * do whatever it needs to do.
     ****************************************************/
-    function buildModule(name, buildModuleCallback) {
+    function buildModule(name, position, buildModuleCallback) {
         canvas.post(`/api/v1/courses/${course.info.canvasOU}/modules`, {
             'module': {
-                'name': name
+                'name': name,
+                'published': false,
+                'position': position,
             }
         }, (postErr, module) => {
             if (postErr) {
@@ -56,31 +65,32 @@ module.exports = (course, stepCallback) => {
             }
             
             buildModuleCallback(null, module);
-                
         });
     }
 
     /****************************************************
     * createTempModule()
+    * 
     * This function goes through and creates the temp module
     * so the instructor resources module will be clean and
     * ready to start the process.
     ****************************************************/
-    function createTempModule(createTempModule) {
-        buildModule('Temp Module', (err, module) => {
+    function createTempModule(createTempModuleCallback) {
+        buildModule('Temp Module', 1, (err, module) => {
             if (err) {
-                createTempModule(err);
+                createTempModuleCallback(err);
                 return;
             }
 
-            course.message(`Sucessfully built temp module. Temp module ID: ${module.id}`);
             tempId = module.id;
-            createTempModule(null);
+            console.log(`ID: ${tempId}`);
+            createTempModuleCallback(null);
         });
     }
 
     /****************************************************
     * moveToTempModule()
+    * 
     * This function goes through the instructor resources
     * module and then moves all of the items to the temporary
     * module
@@ -105,7 +115,6 @@ module.exports = (course, stepCallback) => {
                             return;
                         }
 
-                        course.message(`Successfully moved ${results.title} into the temp module`);
                         eachSeriesCallback(null);
                     });
                 }, (err) => {
@@ -113,8 +122,6 @@ module.exports = (course, stepCallback) => {
                         moveToTempModuleCallback(err);
                         return;
                     }
-
-                    course.message(`Successfully moved all Instructor Resources stuff into temp module`);
 
                     moveToTempModuleCallback(null);
                 });
@@ -124,6 +131,9 @@ module.exports = (course, stepCallback) => {
 
     /****************************************************
     * moveContents()
+    * 
+    * This function goes through and ensures that the items
+    * in the IR module are in the correct order.
     *****************************************************/
     function moveContents(moveContentsCallback) {
         //required ordering according to OCT course
@@ -156,7 +166,7 @@ module.exports = (course, stepCallback) => {
                 }
 
                 //move only standard resources portion of the instructor resources module.
-                asyncLib.eachOfSeries(orderArray, (item, key, eachLimitCallback) => {
+                asyncLib.eachOfSeries(orderArray, (item, key, eachOfSeriesCallback) => {
                     canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item}`, {
                         'module_item': {
                             'module_id': instructorResourcesId,
@@ -167,16 +177,16 @@ module.exports = (course, stepCallback) => {
                         }
                     }, (putErr, results) => {
                         if (putErr) {
-                            eachLimitCallback(putErr);
+                            eachOfSeriesCallback(putErr);
                             return;
                         }
 
-                        course.log(`re-organized Instructor Resources module`, {
+                        course.log(`Re-organized Instructor Resources module`, {
                             'Title': results.title,
                             'ID': results.id
                         });
 
-                        eachLimitCallback(null);
+                        eachOfSeriesCallback(null);
                     });
                 }, (err) => {
                     if (err) {
@@ -193,6 +203,9 @@ module.exports = (course, stepCallback) => {
 
     /****************************************************
     * implementHeaders()
+    * 
+    * @param orderArrayLength - int
+    * 
     * Purpose: Call the function to build the headers
     * and pass in the number and header title to the function
     *****************************************************/
@@ -235,6 +248,7 @@ module.exports = (course, stepCallback) => {
 
     /****************************************************
     * moveExtraContents()
+    * 
     * Purpose: Move the remaining stuff to the Instructor
     * Resources module.
     *****************************************************/
@@ -255,7 +269,6 @@ module.exports = (course, stepCallback) => {
                                 eachSeriesCallback(err);
                             }
                             
-                            course.message(`Successfully deleted ${item.title} SubHeader`);
                             eachSeriesCallback(null);
                         });
                     } else {
@@ -296,6 +309,7 @@ module.exports = (course, stepCallback) => {
 
     /****************************************************
     * deleteTempModule()
+    * 
     * This function goe through and deletes the temp module.
     * It also resets the tempId to -1 to signify that the
     * module does not exist anymore.
@@ -308,13 +322,13 @@ module.exports = (course, stepCallback) => {
             }
 
             tempId = -1;
-            course.message(`Sucessfully removed temp module`);
             deleteTempModuleCallback(null);
         });
     }
 
     /****************************************************
     * finalTouches()
+    * 
     * This function goes through and ensures that the
     * instructor resources module are being implemented
     * correctly. 
@@ -337,10 +351,11 @@ module.exports = (course, stepCallback) => {
 
     /****************************************************
     * instructorResourcesExist()
+    * 
     * This function goe through the waterfall motions and
-    * acts as the driver for the function
+    * acts as the driver for the functions
     *****************************************************/
-    function instructorResourcesExist() {
+    function instructorResourcesExist(instructorResourcesExistCallback) {
         var functions = [
             createTempModule,
             moveToTempModule,
@@ -353,45 +368,63 @@ module.exports = (course, stepCallback) => {
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
             if (waterfallErr) {
-                course.error(waterfallErr);
+                instructorResourcesExistCallback(waterfallErr);
                 return;
             }
 
-            course.message(`Successfully completed setup-instructor-resources module`);
-            return;
+            instructorResourcesExistCallback(null);
         });
     }
 
-    function instructorResourcesDoNotExist() {
+    /****************************************************
+    * instructorResourcesDoNotExist()
+    * 
+    * This function goe through the waterfall motions and
+    * acts as the driver for the course when it does NOT
+    * have an Instructor Resources module.
+    *****************************************************/
+    function instructorResourcesDoNotExist(instructorResourcesDoNotExistCallback) {
         var functions = [
             createInstructorResourcesModule,
             searchCourse,
+            cleanUpContents,
+            constructIRContents,
+            implementHeaders,
         ];
 
         asyncLib.waterfall(functions, (waterfallErr, results) => {
             if (waterfallErr) {
-                course.error(waterfallErr);
+                instructorResourcesDoNotExistCallback(waterfallErr);
                 return;
             }
 
-            course.message(`Successfully completed setup-instructor-resources module`);
-            return;
+            instructorResourcesDoNotExistCallback(null);
         });
     }
 
+    /****************************************************
+    * createInstructorResourcesModule()
+    * 
+    * This function ensures that the Instructor Resources
+    * module has been created.
+    *****************************************************/
     function createInstructorResourcesModule(createModuleCallback) {
-        buildModule('Instructor Resources Module', (err, module) => {
+        buildModule('Instructor Resources (Do NOT Publish)',  2, (err, module) => {
             if (err) {
-                createTempModule(err);
+                createModuleCallback(err);
                 return;
             }
 
-            course.message(`Sucessfully built Instructor Resources module. Instructor Resources module ID: ${module.id}`);
             instructorResourcesId = module.id;
-            createTempModule(null);
+            createModuleCallback(null);
         });
     }
 
+    /****************************************************
+    * searchCourse()
+    * 
+    * 
+    *****************************************************/
     function searchCourse(searchCourseCallback) {
         var contentsArr = [];
         var validModuleItems = [
@@ -440,12 +473,93 @@ module.exports = (course, stepCallback) => {
                     return;
                 }
 
-                searchCourseCallback(null);
+                searchCourseCallback(null, contentsArr);
             });
         });
     }
 
+    /****************************************************
+    * cleanUpContents()
+    * 
+    * 
+    *****************************************************/
+    function cleanUpContents(contentsArr, cleanUpContentsCallback) {
+        var orderArray = [];
+        var order = [
+            'Setup for Course Instructor',
+            'General Lesson Notes',
+            'Release Notes',
+            'Course Map',
+            'Teaching Group Directory',
+            'Online Instructor Community',
+            'Course Maintenance Log'
+        ];
+        var checkFlag = false;
 
+        for (var i = 0; i < order.length; i++) {
+            checkFlag = false;
+
+            for (var x = 0; x < contentsArr.length; x++) {
+                if (order[i] == contentsArr[x].title) {
+                    orderArray.push(contentsArr[x]);
+                    checkFlag = true;
+                    break;
+                }
+    
+                if (!checkFlag && x === contentsArr.length - 1) {
+                    course.warning(`${order[i]} was not found in the course. Please check the course.`);
+                }
+            }
+        }
+
+        cleanUpContentsCallback(null, orderArray);
+    }
+
+    /****************************************************
+    * constructIRContents()
+    * 
+    * 
+    *****************************************************/
+    function constructIRContents(moduleItems, constructIRContentsCallback) {
+        if (typeof instructorResourcesId === 'undefined' ||
+            instructorResourcesId === null) {
+                constructIRContentsCallback(new Error('Instructor Resources does not exist in the course.'));
+                return;
+        }
+
+        asyncLib.eachOfSeries(moduleItems, (item, key, eachOfSeriesCallback) => {
+            canvas.put(`/api/v1/courses/${course.info.canvasOU}/modules/${item.module_id}/items/${item.id}`, {
+                        'module_item': {
+                            'module_id': instructorResourcesId, 
+                            'new_tab': true,
+                            'indent': 1,
+                            'published': false,
+                            'position': key + 1,
+                        }   
+                    },
+                     (putErr, results) => {
+                        if (putErr) {
+                            eachOfSeriesCallback(putErr);
+                            return;
+                        }
+
+                         course.log(`Re-organized Instructor Resources module`, {
+                             'Title': results.title,
+                             'ID': results.id
+                         });
+                         
+                        eachOfSeriesCallback(null);
+                    });
+
+        }, (eachOfSeriesErr) => {
+            if (eachOfSeriesErr) {
+                constructIRContentsCallback(eachOfSeriesErr, moduleItems.length);
+                return;
+            }
+
+            constructIRContentsCallback(null, moduleItems.length);
+        });
+    }
 
     /****************************************************************
     *                         START HERE                           *
@@ -458,23 +572,33 @@ module.exports = (course, stepCallback) => {
             return;
         }
 
-        course.message(`Successfully retrieved ${moduleList.length} modules.`);
-
         //retrieve the id of the instructor module so we can access the module
         //and update the instructorResourcesId global variable
         var instructorResourcesObj = moduleList.find((module) => {
             return module.name === 'Instructor Resources';
         });
 
-        //instructor resources module does not exist. throw error and move on to the next child module
+        //we need to check here if an Instructor Resources module was ever found
+        //If it hasn't been found, we need to create one and move all Instructor
+        //Resources items to the IR Module. Otherwise, just proceed with the regular functions.
         if (typeof instructorResourcesObj === "undefined") {
-            course.warning('Will be fixed soon...');
-            stepCallback(null, course);
+            instructorResourcesDoNotExist((err) => {
+                if (err) {
+                    course.error(err);
+                }
+                
+                stepCallback(null, course);
+            });
         } else {
             instructorResourcesId = instructorResourcesObj.id;
 
-            instructorResourcesExist();
-            stepCallback(null, course);
+            instructorResourcesExist((err) => {
+                if (err) {
+                    course.error(err);
+                }
+
+                stepCallback(null, course);
+            });
         }
     });
 };
