@@ -83,7 +83,6 @@ module.exports = (course, stepCallback) => {
             }
 
             tempId = module.id;
-            console.log(`ID: ${tempId}`);
             createTempModuleCallback(null);
         });
     }
@@ -158,7 +157,7 @@ module.exports = (course, stepCallback) => {
             } else {
                 for (var i = 0; i < order.length; i++) {
                     for (var x = 0; x < moduleItem.length; x++) {
-                        if (order[i] == moduleItem[x].title) {
+                        if (order[i].toLowerCase() == moduleItem[x].title.toLowerCase()) {
                             orderArray.push(moduleItem[x].id);
                             break;
                         }
@@ -500,7 +499,7 @@ module.exports = (course, stepCallback) => {
             checkFlag = false;
 
             for (var x = 0; x < contentsArr.length; x++) {
-                if (order[i] == contentsArr[x].title) {
+                if (order[i].toLowerCase() == contentsArr[x].title.toLowerCase()) {
                     orderArray.push(contentsArr[x]);
                     checkFlag = true;
                     break;
@@ -547,7 +546,7 @@ module.exports = (course, stepCallback) => {
                              'Title': results.title,
                              'ID': results.id
                          });
-                         
+
                         eachOfSeriesCallback(null);
                     });
 
