@@ -37,7 +37,7 @@ Describe in steps how the module accomplishes its goals.
 
 1. Gets the list of modules in the course and determines if the Instructor Resources exist.
     - If there is an Instructor Resources module, it grabs the ID of the module and then proceeds to the next step.
-    - If it does not exist, the program will throw a warning then end the program.
+    - If it does not exist, the program will go ahead and create one.
 2. Create a temporary module and move all of the contents from the Instructor Resources module to the temp module.
 3. Create an array of IDs for the activities that are to be in order -- they are to be under the Standard Resources header
 4. Move the contents from the temp module to the Instructor Resources according to the array of IDs. 
