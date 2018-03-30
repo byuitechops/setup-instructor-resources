@@ -1,9 +1,5 @@
 /*eslint-env node, es6*/
 
-/* Module Description */
-
-/* Put dependencies here */
-
 const canvas = require('canvas-wrapper');
 const asyncLib = require('async');
 
@@ -28,7 +24,7 @@ module.exports = (course, stepCallback) => {
             'module_item': {
                 'title': headerName,
                 'type': 'SubHeader',
-                'position': position
+                'position': position,
             }
         }, (postErr, results) => {
             if (postErr) {
@@ -143,7 +139,7 @@ module.exports = (course, stepCallback) => {
             'Course Map',
             'Teaching Group Directory',
             'Online Instructor Community',
-            'Course Maintenance Log'
+            'Course Maintenance Log',
         ];
 
         //store results
@@ -213,20 +209,20 @@ module.exports = (course, stepCallback) => {
         //this way guarantees that the Standard Resources header is created
         //before the Supplemental Resources header so the results are always
         //consistent.
-        var headersObjArray = [
+        var headers = [
             {
                 'title': 'Standard Resources',
-                'position': 1
+                'position': 1,
             },
             {
                 'title': 'Supplemental Resources',
 
                 //the + 2 accounts for the Standard Resources header and the order array length
-                'position': orderArrayLength + 2
-            }
+                'position': orderArrayLength + 2,
+            },
         ];
 
-        asyncLib.eachSeries(headersObjArray, (header, eachSeriesCallback) => {
+        asyncLib.eachSeries(headers, (header, eachSeriesCallback) => {
             buildHeader(header.title, header.position, (headerErr, results) => {
                 if (headerErr) {
                     eachSeriesCallback(headerErr);
@@ -254,15 +250,13 @@ module.exports = (course, stepCallback) => {
     function moveExtraContents(moveExtraContentsCallback) {
         //get the temp module list
         canvas.get(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items`, (getErr, moduleItem) => {
-            // handle get Err
             if (getErr) {
                 moveExtraContentsCallback(getErr);
                 return;
             } else {
-                //initiate the moving process
                 asyncLib.eachSeries(moduleItem, (item, eachSeriesCallback) => {
                     if (item.type === 'SubHeader') {
-                        //at this point, we know it is a subheader so we need to delete it from the course.
+                        //delete all unnecessary subheaders
                         canvas.delete(`/api/v1/courses/${course.info.canvasOU}/modules/${tempId}/items/${item.id}`, (err, results) => {
                             if (err) {
                                 eachSeriesCallback(err);
@@ -286,7 +280,7 @@ module.exports = (course, stepCallback) => {
                                 return;
                             }
 
-                            course.log(`re-organized Instructor Resources module`, {
+                            course.log(`Re-organized Instructor Resources module`, {
                                 'Title': item.title,
                                 'ID': item.id
                             });
@@ -422,7 +416,9 @@ module.exports = (course, stepCallback) => {
     /****************************************************
     * searchCourse()
     * 
-    * 
+    * This function goes through the course and tries to 
+    * find the items that belong inside the Instructor 
+    * Resources.
     *****************************************************/
     function searchCourse(searchCourseCallback) {
         var contentsArr = [];
@@ -436,12 +432,14 @@ module.exports = (course, stepCallback) => {
             'Course Maintenance Log',
         ];
 
+        //retrieving all modules
         canvas.getModules(course.info.canvasOU, (getModulesErr, moduleList) => {
             if (getModulesErr) {
                 searchCourseCallback(getModulesErr);
                 return;
             }
 
+            //getting all assignments from each module
             asyncLib.each(moduleList, (element, eachCallback) => {
                 canvas.getModuleItems(course.info.canvasOU, element.id, (getModulesItemsErr, moduleItems) => {
                     if (getModulesItemsErr) {
@@ -480,10 +478,12 @@ module.exports = (course, stepCallback) => {
     /****************************************************
     * cleanUpContents()
     * 
-    * 
+    * This goes through and ensures that the ordering is
+    * correct for the Instructor Resources module.
     *****************************************************/
     function cleanUpContents(contentsArr, cleanUpContentsCallback) {
         var orderArray = [];
+        var checkFlag = false;
         var order = [
             'Setup for Course Instructor',
             'General Lesson Notes',
@@ -493,7 +493,6 @@ module.exports = (course, stepCallback) => {
             'Online Instructor Community',
             'Course Maintenance Log'
         ];
-        var checkFlag = false;
 
         for (var i = 0; i < order.length; i++) {
             checkFlag = false;
@@ -505,6 +504,7 @@ module.exports = (course, stepCallback) => {
                     break;
                 }
     
+                //the activity was never found in the course.
                 if (!checkFlag && x === contentsArr.length - 1) {
                     course.warning(`${order[i]} was not found in the course. Please check the course.`);
                 }
@@ -517,9 +517,12 @@ module.exports = (course, stepCallback) => {
     /****************************************************
     * constructIRContents()
     * 
-    * 
+    * Since the ordering has been fixed, this function
+    * goes through and makes the api calls necessary 
+    * to move the item to the proper module. 
     *****************************************************/
     function constructIRContents(moduleItems, constructIRContentsCallback) {
+        //just making sure something doesn't go wrong here.
         if (typeof instructorResourcesId === 'undefined' ||
             instructorResourcesId === null) {
                 constructIRContentsCallback(new Error('Instructor Resources does not exist in the course.'));
@@ -533,10 +536,9 @@ module.exports = (course, stepCallback) => {
                             'new_tab': true,
                             'indent': 1,
                             'published': false,
-                            'position': key + 1,
+                            'position': key + 1, //move below SubHeader
                         }   
-                    },
-                     (putErr, results) => {
+                    }, (putErr, results) => {
                         if (putErr) {
                             eachOfSeriesCallback(putErr);
                             return;
