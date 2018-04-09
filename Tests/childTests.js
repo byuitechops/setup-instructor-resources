@@ -1,48 +1,76 @@
-// /*eslint-env node, es6*/
-
-// /* Dependencies */
-// const tap = require('tap');
-
-// function g1Tests(course, callback) {
-//     var srArr = course.info.standardResourcesArr;
-//     var hArr = course.info.headerArr;
-
-//     tap.equal(srArr.length, 6);
-
-//     tap.equal(srArr[0], 'Setup for Course Instructor');
-//     tap.equal(srArr[1], 'General Lesson Notes');
-//     tap.equal(srArr[2], 'Release Notes');
-//     tap.equal(srArr[3], 'Course Map');
-//     tap.equal(srArr[4], 'Teaching Group Directory');
-//     tap.equal(srArr[5], 'Online Instructor Community');
-
-//     tap.equal(hArr, 2);
-
-//     tap.equal(hArr[0], 'Standard Resources');
-//     tap.equal(hArr[1], 'Supplemental Resources');
-
-//     callback(null, course);
-// }
-
-// module.exports = [
-//         {
-//             gauntlet: 1,
-//             tests: g1Tests
-//         }
-// ];
-
 /* Dependencies */
 const tap = require('tap');
 const canvas = require('canvas-wrapper');
+const asyncLib = require('async');
 
 module.exports = (course, callback) => {
-    tap.test('child-template', (test) => {
+    tap.test('setup-instructor-resources', (test) => {
+        var instructorResourcesId = -1;
 
-        test.pass('potato');
-        test.pass('tomato');
-        test.fail('avacado');
+        function getModules(getModulesCallback) {
+            /* Check if the modules have been deleted */
+            canvas.getModules(course.info.canvasOU, (getModulesErr, moduleList) => {
+                if (getModulesErr) {
+                    getModulesCallback(getModulesErr);
+                    return;
+                } 
+                moduleList.forEach(module => {
+                    if (module.name === 'Instructor Resources') {
+                        instructorResourcesId = module.id;
+                    } 
+                });
 
-        test.end();
+                getModulesCallback(null);
+            });
+        }
+
+        function getItems(getItemsCallback) {
+            var order = [
+                'General Lesson Notes',
+                'Course Map',
+                'Teaching Group Directory',
+                'Online Instructor Community',
+                'Course Maintenance Log',
+                'Instructor Help Guide: Getting Started with Zoom',
+                'Course Schedule (Archived)',
+                'Course Maintenance Requests',
+                'Copyright Permissions',
+                'Copyediting Style Sheet',
+            ];
+
+            /* Check Student Resources Module Item Order */
+            canvas.getModuleItems(course.info.canvasOU, instructorResourcesId, (getItemsErr, items) => {
+                if (getItemsErr) {
+                    getItemsCallback(getItemsErr);
+                    return;
+                }
+
+                items.forEach((item, i) => {
+                    if (item.title !== order[i]) {
+                        test.fail('Module item order is not correct in Instructor Resources Module');
+                    } else {
+                        test.pass('Module item order is correct!');
+                    }
+                });
+
+                getItemsCallback(null);
+            });
+        }
+
+        var myFunctions = [
+            getModules,
+            getItems,
+        ];
+
+        asyncLib.waterfall(myFunctions, (waterfallErr) => {
+            if (waterfallErr) {
+                test.end();
+                return;
+            }
+
+            test.end();
+        })
+        
     });
 
     callback(null, course);
